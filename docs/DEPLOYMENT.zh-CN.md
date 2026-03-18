@@ -3,13 +3,13 @@
 [中文](DEPLOYMENT.zh-CN.md) | [English](DEPLOYMENT.md)
 
 这份文档是给第一次部署的人看的。  
-目标不是解释内部实现，而是帮助你一步一步把它跑起来，并让手机能够访问。
+目标不是解释内部实现，而是帮助你一步一步把它跑起来，并让手机能够访问。当前宿主机支持 Windows 和 macOS。
 
 ## 目标效果
 
 部署完成后，你应该能做到这些事：
 
-- 在电脑上启动本地 Codex 控制服务
+- 在宿主机上启动本地 Codex 控制服务
 - 在手机上通过私有地址访问网页
 - 第一次登录新设备时，在电脑端手动批准
 - 登录后在手机上继续查看和发送 Codex 消息
@@ -19,13 +19,15 @@
 ### 操作系统
 
 - Windows 10 / 11
+- macOS 13+
 
 ### 软件要求
 
 - Python 3.11+
 - Node.js 22 LTS
 - Git
-- nginx for Windows
+- nginx
+- macOS 下额外需要 tmux
 - Tailscale（推荐）
 
 ### 为什么推荐 Tailscale
@@ -106,10 +108,16 @@ npm install
 
 - 通常不需要额外依赖
 
-如果你打算把桌面工具打包成 `.exe`：
+如果你打算把桌面工具打包成 `.exe` 或 `.app`：
 
 ```powershell
 pip install -r requirements.txt
+```
+
+macOS 打包 `.app` 则执行：
+
+```bash
+bash scripts/package-mobile-codex-control.sh
 ```
 
 ## 第 5 步：检查本地环境
@@ -118,6 +126,13 @@ pip install -r requirements.txt
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/check-mobile-codex-runtime.ps1
+```
+
+macOS 宿主机则执行：
+
+```bash
+bash scripts/check-mobile-codex-runtime.sh
+python3 scripts/check-mobile-codex-compat.py
 ```
 
 你要重点看这几项：
@@ -135,6 +150,12 @@ powershell -ExecutionPolicy Bypass -File scripts/check-mobile-codex-runtime.ps1
 powershell -ExecutionPolicy Bypass -File scripts/start-mobile-codex-stack.ps1
 ```
 
+macOS 宿主机则执行：
+
+```bash
+bash scripts/start-mobile-codex-stack.sh
+```
+
 默认会启动两个本地服务：
 
 - 应用服务：`127.0.0.1:3001`
@@ -144,6 +165,12 @@ powershell -ExecutionPolicy Bypass -File scripts/start-mobile-codex-stack.ps1
 
 ```powershell
 python mobile_codex_control.py
+```
+
+macOS 宿主机则执行：
+
+```bash
+python3 mobile_codex_control.py
 ```
 
 或者：
@@ -214,6 +241,18 @@ powershell -ExecutionPolicy Bypass -File scripts/enable-mobile-codex-remote.ps1
 4. 手机端自动继续登录
 
 这是本项目的重要安全机制，请不要跳过。
+
+## Codex 更新后的兼容性检查
+
+默认不需要每次更新 Codex 都重新适配这个 helper。
+
+推荐固定流程：
+
+1. 先跑 `python3 scripts/check-mobile-codex-compat.py`
+2. 再跑一遍本地启停烟测
+3. 只有检查失败时，才做针对性修复
+
+真正高风险、基本需要重新验证的，是你主动升级 `claudecodeui`，因为本仓库对上游 `v1.25.2` 采用的是整文件覆盖。
 
 ## 环境变量（可选）
 

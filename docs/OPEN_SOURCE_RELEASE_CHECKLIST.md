@@ -17,6 +17,8 @@
 
 - [ ] Run `scripts/smoke-test-override-flow.ps1` against a clean upstream `v1.25.2` checkout
 - [ ] Test local start/stop scripts on a fresh machine profile
+- [ ] Run `python3 scripts/check-mobile-codex-compat.py`
 - [ ] Run `python -m py_compile mobile_codex_control.py`
 - [ ] Package the desktop tool with `scripts/package-mobile-codex-control.cmd` if you plan to ship an EXE
+- [ ] Package the desktop tool with `scripts/package-mobile-codex-control.sh` if you plan to ship a macOS app
 - [ ] Add GitHub issue templates and a release note explaining the threat model

@@ -65,14 +65,17 @@ Tailscale 私网 HTTPS
 
 ## 你需要准备什么
 
-请先在 Windows 电脑上准备：
+当前支持两类宿主机：
+
+- Windows 10 / 11
+- macOS（建议 13+，含 Apple Silicon 与 Intel）
 
 ### 必装
 
 - Python 3.11 或更高
 - Node.js 22 LTS
 - Git
-- nginx for Windows
+- nginx
 - 一个可正常使用的 Codex 本地环境
 
 ### 强烈推荐
@@ -83,6 +86,20 @@ Tailscale 私网 HTTPS
 
 - 这是最容易做成“只有你自己能访问”的远程方案
 - 比直接公网暴露安全得多
+
+### Mac 宿主机补充
+
+如果你准备把 MacBook 当宿主机：
+
+- `python mobile_codex_control.py` 现在支持直接在 macOS 上运行
+- 启停脚本改为 `scripts/*.sh`
+- 后台启动依赖 `tmux`
+- 打包 `.app` 使用 `scripts/package-mobile-codex-control.sh`
+- 推荐先跑一次兼容性检查：
+
+```bash
+python3 scripts/check-mobile-codex-compat.py
+```
 
 ## 更省事的使用方式
 
@@ -108,9 +125,11 @@ Tailscale 私网 HTTPS
 
 ## 最快部署路线
 
+### Windows 便携包路线
+
 如果你不想一开始看太多说明，可以直接按这个顺序做：
 
-1. 安装 Python 3.11+、Node.js 22、nginx、Tailscale
+1. 安装 Python 3.11+、Node.js 22、nginx、tmux、Tailscale
 2. 从发布页下载便携版，完整解压到一个固定目录
 3. 双击 `MobileCodexControl.exe`
 4. 在初始化向导里确认 `node.exe`、`nginx.exe`、`tailscale.exe` 路径
@@ -122,6 +141,21 @@ Tailscale 私网 HTTPS
 10. 首次登录新设备时，在电脑端批准这台设备
 
 做到这里，你通常已经可以从手机继续控制电脑上的 Codex 了。
+
+### Mac 源码路线
+
+如果你的宿主机是 Mac，建议直接按这个顺序做：
+
+1. 安装 Python 3.11+、Node.js 22、nginx、Tailscale
+2. 把上游 `claudecodeui v1.25.2` 放到 `vendor/claudecodeui-1.25.2`
+3. 执行 `powershell -ExecutionPolicy Bypass -File scripts/apply-upstream-overrides.ps1`
+4. 进入 `vendor/claudecodeui-1.25.2` 后执行 `npm install`
+5. 回到仓库根目录，执行 `bash scripts/check-mobile-codex-runtime.sh`
+6. 执行 `python3 scripts/check-mobile-codex-compat.py`
+7. 执行 `bash scripts/start-mobile-codex-stack.sh`
+8. 再执行 `python3 mobile_codex_control.py`
+9. 在本机浏览器打开 `http://127.0.0.1:3001` 完成首次注册
+10. 在桌面控制工具里开启远程发布，再让 iPhone 走同一个 Tailscale 网络访问
 
 ## 首次设备批准
 
@@ -193,6 +227,12 @@ powershell -ExecutionPolicy Bypass -File scripts/smoke-test-override-flow.ps1 -U
 powershell -ExecutionPolicy Bypass -File scripts/check-mobile-codex-runtime.ps1
 ```
 
+Mac 宿主机则运行：
+
+```bash
+bash scripts/check-mobile-codex-runtime.sh
+```
+
 只要里面有空值，就先不要继续下一步。
 
 ### 3. 手机封装壳不兼容
@@ -213,10 +253,18 @@ powershell -ExecutionPolicy Bypass -File scripts/check-mobile-codex-runtime.ps1
 powershell -ExecutionPolicy Bypass -File scripts/start-mobile-codex-stack.ps1
 ```
 
+```bash
+bash scripts/start-mobile-codex-stack.sh
+```
+
 ### 停止整套服务
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/stop-mobile-codex-stack.ps1
+```
+
+```bash
+bash scripts/stop-mobile-codex-stack.sh
 ```
 
 ### 检查 Tailscale 状态
@@ -225,10 +273,24 @@ powershell -ExecutionPolicy Bypass -File scripts/stop-mobile-codex-stack.ps1
 powershell -ExecutionPolicy Bypass -File scripts/check-tailscale-status.ps1
 ```
 
+```bash
+bash scripts/check-tailscale-status.sh
+```
+
+### 兼容性检查
+
+```bash
+python3 scripts/check-mobile-codex-compat.py
+```
+
 ### 维护者：打包桌面工具
 
 ```powershell
 scripts\package-mobile-codex-control.cmd
+```
+
+```bash
+bash scripts/package-mobile-codex-control.sh
 ```
 
 ### 维护者：生成便携发布目录
@@ -249,6 +311,24 @@ powershell -ExecutionPolicy Bypass -File scripts/smoke-test-override-flow.ps1 -U
 ```
 
 ## 常见问题
+
+### 0. 后续 Codex 更新后，是不是每次都要重新适配？
+
+通常不需要。
+
+这个项目主要依赖的是：
+
+- `codex` CLI 是否还能执行
+- `~/.codex/config.toml` 是否还存在
+- `~/.codex/sessions/*.jsonl` 是否还保留当前关键事件结构
+
+所以更稳妥的流程是：
+
+1. 更新 Codex 后先跑 `python3 scripts/check-mobile-codex-compat.py`
+2. 再跑一次本地启动烟测
+3. 只有检查失败时，才做针对性适配
+
+真正高风险、基本需要重新验证的，是你主动升级 `claudecodeui` 版本，而不是日常更新 Codex Desktop。
 
 ### 1. 手机能打开页面，但登录后没反应
 

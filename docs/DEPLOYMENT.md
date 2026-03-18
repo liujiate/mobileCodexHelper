@@ -3,13 +3,13 @@
 [中文](DEPLOYMENT.zh-CN.md) | [English](DEPLOYMENT.md)
 
 This guide is written for first-time users.  
-The goal is simple: get the stack running on a Windows PC and make it reachable from your phone.
+The goal is simple: get the stack running on a Windows PC or Mac and make it reachable from your phone.
 
 ## Expected result
 
 After deployment, you should be able to:
 
-- start the local Codex control services on your PC
+- start the local Codex control services on your host machine
 - open the web panel from your phone through a private address
 - approve a new phone from the desktop tool on first login
 - continue viewing and sending Codex messages from the phone
@@ -19,13 +19,15 @@ After deployment, you should be able to:
 ### OS
 
 - Windows 10 / 11
+- macOS 13+
 
 ### Required software
 
 - Python 3.11+
 - Node.js 22 LTS
 - Git
-- nginx for Windows
+- nginx
+- tmux on macOS
 - Tailscale (recommended)
 
 ### Why Tailscale is recommended
@@ -106,10 +108,16 @@ If you only want to run the desktop tool directly:
 
 - you usually do not need extra Python packages
 
-If you want to package the desktop tool as an `.exe`:
+If you want to package the desktop tool as an `.exe` or `.app`:
 
 ```powershell
 pip install -r requirements.txt
+```
+
+On macOS, build the `.app` with:
+
+```bash
+bash scripts/package-mobile-codex-control.sh
 ```
 
 ## Step 5: Check the local environment
@@ -118,6 +126,13 @@ Run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/check-mobile-codex-runtime.ps1
+```
+
+On macOS, run:
+
+```bash
+bash scripts/check-mobile-codex-runtime.sh
+python3 scripts/check-mobile-codex-compat.py
 ```
 
 Important things to confirm:
@@ -135,6 +150,12 @@ Run:
 powershell -ExecutionPolicy Bypass -File scripts/start-mobile-codex-stack.ps1
 ```
 
+On macOS, run:
+
+```bash
+bash scripts/start-mobile-codex-stack.sh
+```
+
 By default this starts:
 
 - app service on `127.0.0.1:3001`
@@ -144,6 +165,12 @@ By default this starts:
 
 ```powershell
 python mobile_codex_control.py
+```
+
+On macOS:
+
+```bash
+python3 mobile_codex_control.py
 ```
 
 or:
@@ -215,6 +242,18 @@ When a new device logs in for the first time:
 5. the phone automatically continues the login flow
 
 This is an important security feature. Do not skip it.
+
+## Compatibility checks after Codex updates
+
+You do not need to re-adapt this helper after every Codex Desktop update by default.
+
+Use this flow instead:
+
+1. Run `python3 scripts/check-mobile-codex-compat.py`
+2. Run one local start/stop smoke test
+3. Only do a targeted fix if the probe or smoke test fails
+
+The high-risk upgrade remains `claudecodeui`, because this repo applies whole-file overrides on top of a pinned upstream `v1.25.2`.
 
 ## Optional environment variables
 

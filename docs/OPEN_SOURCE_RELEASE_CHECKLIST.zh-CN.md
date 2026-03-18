@@ -17,6 +17,8 @@
 
 - [ ] 用一份干净的上游 `v1.25.2` 实测 `scripts/smoke-test-override-flow.ps1`
 - [ ] 在新机器环境下测试本地启动 / 停止脚本
+- [ ] 运行 `python3 scripts/check-mobile-codex-compat.py`
 - [ ] 执行 `python -m py_compile mobile_codex_control.py`
 - [ ] 如果要发布 EXE，执行 `scripts/package-mobile-codex-control.cmd`
+- [ ] 如果要发布 macOS `.app`，执行 `scripts/package-mobile-codex-control.sh`
 - [ ] 补 issue 模板和 release note，说明安全边界

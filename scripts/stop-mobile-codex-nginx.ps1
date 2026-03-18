@@ -1,10 +1,17 @@
+$workspace = Split-Path -Parent $PSScriptRoot
+$runtimeRoot = if ($env:MOBILE_CODEX_RUNTIME_DIR) {
+  $env:MOBILE_CODEX_RUNTIME_DIR
+} else {
+  Join-Path $workspace '.runtime'
+}
 $asciiAlias = if ($env:MOBILE_CODEX_ASCII_ALIAS) {
   $env:MOBILE_CODEX_ASCII_ALIAS
 } else {
   Join-Path $env:SystemDrive 'mobileCodexHelper_ascii'
 }
+$runtimeLeaf = Split-Path -Leaf $runtimeRoot
 
-$pidFile = Join-Path $asciiAlias '.runtime\nginx\logs\mobile-codex.pid'
+$pidFile = Join-Path (Join-Path $asciiAlias $runtimeLeaf) 'nginx\logs\mobile-codex.pid'
 if (Test-Path $pidFile) {
   $pidValue = Get-Content $pidFile -ErrorAction SilentlyContinue | Select-Object -First 1
   if ($pidValue -match '^\d+$') {

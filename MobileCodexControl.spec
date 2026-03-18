@@ -1,5 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import sys
+
 
 a = Analysis(
     ['mobile_codex_control.py'],
@@ -36,3 +38,11 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        exe,
+        name='MobileCodexControl.app',
+        icon=None,
+        bundle_identifier=None,
+    )

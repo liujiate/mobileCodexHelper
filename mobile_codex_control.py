@@ -6,7 +6,6 @@ import os
 import re
 import socket
 import sqlite3
-import subprocess
 import sys
 import threading
 import time
@@ -18,6 +17,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
+
+from mobile_codex_runtime import ListenerInfo, create_host_runtime, resolve_workspace
 
 try:
     import tkinter as tk
@@ -32,28 +33,12 @@ PHONE_ACTIVITY_WINDOW_MINUTES = 10
 LOCAL_PANEL_URL = f"http://127.0.0.1:{APP_PORT}"
 APP_HEALTH_URL = f"{LOCAL_PANEL_URL}/health"
 PROXY_HEALTH_URL = f"http://127.0.0.1:{PROXY_PORT}/health"
-REMOTE_TARGET = f"http://127.0.0.1:{PROXY_PORT}"
-
-
-def resolve_workspace() -> Path:
-    candidates = []
-    if getattr(sys, "frozen", False):
-        executable_dir = Path(sys.executable).resolve().parent
-        candidates.extend([executable_dir, executable_dir.parent, executable_dir.parent.parent])
-    else:
-        source_dir = Path(__file__).resolve().parent
-        candidates.extend([source_dir, source_dir.parent])
-
-    for candidate in candidates:
-        if (candidate / "scripts" / "start-mobile-codex-stack.ps1").exists():
-            return candidate
-
-    return Path(__file__).resolve().parent
 
 
 WORKSPACE = resolve_workspace()
-SCRIPTS_DIR = WORKSPACE / "scripts"
-APP_STDERR_LOG = WORKSPACE / "tmp" / "logs" / "mobile-codex-app.stderr.log"
+HOST_RUNTIME = create_host_runtime(WORKSPACE)
+HOST_PATHS = HOST_RUNTIME.paths
+APP_STDERR_LOG = HOST_PATHS.app_stderr_log
 MOBILE_USER_AGENT = re.compile(r"android|iphone|ipad|mobile|ios|harmony", re.IGNORECASE)
 MOBILE_OS = {"android", "ios"}
 NGINX_MONTHS = {
@@ -70,28 +55,9 @@ NGINX_MONTHS = {
     "Nov": 11,
     "Dec": 12,
 }
-
-
-def resolve_tailscale_path() -> Path:
-    configured = os.environ.get("MOBILE_CODEX_TAILSCALE")
-    if configured:
-        return Path(configured)
-    return Path(r"C:\Program Files\Tailscale\tailscale.exe")
-
-
-def resolve_ascii_alias_path() -> Path:
-    configured = os.environ.get("MOBILE_CODEX_ASCII_ALIAS")
-    if configured:
-        return Path(configured)
-
-    system_drive = os.environ.get("SystemDrive", "C:")
-    return Path(system_drive) / "mobileCodexHelper_ascii"
-
-
-ASCII_ALIAS_PATH = resolve_ascii_alias_path()
-TAILSCALE = resolve_tailscale_path()
-NGINX_ACCESS_LOG = ASCII_ALIAS_PATH / ".runtime" / "nginx" / "logs" / "mobile-codex.access.log"
-NGINX_ERROR_LOG = ASCII_ALIAS_PATH / ".runtime" / "nginx" / "logs" / "mobile-codex.error.log"
+NGINX_ACCESS_LOG = HOST_PATHS.proxy_access_log
+NGINX_ERROR_LOG = HOST_PATHS.proxy_error_log
+TAILSCALE = HOST_PATHS.tailscale
 
 
 def inspect_auth_db(path: Path) -> tuple[int, set[str]]:
@@ -173,21 +139,6 @@ class StatusBlock:
             "level": self.level,
         }
 
-
-@dataclass
-class ListenerInfo:
-    port: int
-    pid: int
-    name: str
-    path: str
-
-    def summary(self) -> str:
-        parts = [f"端口 {self.port}", f"PID {self.pid}"]
-        if self.name:
-            parts.append(self.name)
-        return " | ".join(parts)
-
-
 def ensure_stdio_utf8() -> None:
     for stream_name in ("stdout", "stderr"):
         stream = getattr(sys, stream_name, None)
@@ -251,30 +202,8 @@ def summarize_connection_error(message: str) -> str:
     return message
 
 
-def subprocess_window_options() -> dict[str, Any]:
-    if sys.platform != "win32":
-        return {}
-    startupinfo = subprocess.STARTUPINFO()
-    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-    startupinfo.wShowWindow = 0
-    return {
-        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
-        "startupinfo": startupinfo,
-    }
-
-
-def run_command(args: list[str], timeout: int = 20) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        args,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
-        check=False,
-        cwd=str(WORKSPACE),
-        **subprocess_window_options(),
-    )
+def run_command(args: list[str], timeout: int = 20) -> Any:
+    return HOST_RUNTIME.run_command(args, timeout=timeout)
 
 
 def wait_for(predicate: Callable[[], bool], timeout: float, interval: float = 1.0) -> bool:
@@ -284,44 +213,6 @@ def wait_for(predicate: Callable[[], bool], timeout: float, interval: float = 1.
             return True
         time.sleep(interval)
     return predicate()
-
-
-def powershell_file(script_name: str, timeout: int = 60) -> subprocess.CompletedProcess[str]:
-    script_path = SCRIPTS_DIR / script_name
-    return run_command(
-        [
-            "powershell",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            str(script_path),
-        ],
-        timeout=timeout,
-    )
-
-
-def run_powershell_json(command: str, timeout: int = 12) -> Any | None:
-    result = run_command(
-        [
-            "powershell",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-Command",
-            command,
-        ],
-        timeout=timeout,
-    )
-    if result.returncode != 0:
-        return None
-    text = result.stdout.strip()
-    if not text:
-        return None
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        return None
 
 
 def http_health(url: str, timeout: float = 2.5) -> tuple[bool, str]:
@@ -371,41 +262,7 @@ def parse_nginx_timestamp(value: str) -> str | None:
 
 
 def get_listener_map(ports: list[int] | None = None) -> dict[int, ListenerInfo]:
-    target_ports = ports or [APP_PORT, PROXY_PORT]
-    ports_literal = ",".join(str(port) for port in target_ports)
-    command = f"""
-$ports = @({ports_literal})
-$listeners = foreach ($item in Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object {{ $ports -contains $_.LocalPort }}) {{
-    $proc = Get-Process -Id $item.OwningProcess -ErrorAction SilentlyContinue
-    [PSCustomObject]@{{
-        port = [int]$item.LocalPort
-        pid = [int]$item.OwningProcess
-        name = if ($proc) {{ $proc.ProcessName }} else {{ '' }}
-        path = if ($proc -and $proc.Path) {{ $proc.Path }} else {{ '' }}
-    }}
-}}
-if ($listeners) {{
-    $listeners | ConvertTo-Json -Compress
-}}
-"""
-    data = run_powershell_json(command)
-    if not data:
-        return {}
-    items = [data] if isinstance(data, dict) else data if isinstance(data, list) else []
-
-    listener_map: dict[int, ListenerInfo] = {}
-    for item in items:
-        try:
-            port = int(item.get("port"))
-            listener_map[port] = ListenerInfo(
-                port=port,
-                pid=int(item.get("pid")),
-                name=str(item.get("name") or ""),
-                path=str(item.get("path") or ""),
-            )
-        except (TypeError, ValueError):
-            continue
-    return listener_map
+    return HOST_RUNTIME.get_listener_map(ports)
 
 
 def describe_listener(listener: ListenerInfo | None) -> str:
@@ -454,27 +311,11 @@ def build_remote_block(remote: dict[str, Any], app_ok: bool, proxy_ok: bool) -> 
 
 
 def load_tailscale_status() -> dict[str, Any]:
-    if not TAILSCALE.exists():
-        return {"ok": False, "error": f"Tailscale CLI 未找到：{TAILSCALE}"}
-    result = run_command([str(TAILSCALE), "status", "--json"])
-    if result.returncode != 0:
-        return {"ok": False, "error": result.stderr.strip() or result.stdout.strip() or "读取 Tailscale 状态失败"}
-    try:
-        return {"ok": True, "data": json.loads(result.stdout)}
-    except json.JSONDecodeError as exc:
-        return {"ok": False, "error": f"Tailscale 返回的 JSON 无法解析: {exc}"}
+    return HOST_RUNTIME.load_tailscale_status()
 
 
 def load_serve_status() -> dict[str, Any]:
-    if not TAILSCALE.exists():
-        return {"ok": False, "error": f"Tailscale CLI 未找到：{TAILSCALE}"}
-    result = run_command([str(TAILSCALE), "serve", "status", "--json"])
-    if result.returncode != 0:
-        return {"ok": False, "error": result.stderr.strip() or result.stdout.strip() or "读取远程发布状态失败"}
-    try:
-        return {"ok": True, "data": json.loads(result.stdout)}
-    except json.JSONDecodeError as exc:
-        return {"ok": False, "error": f"远程发布状态 JSON 无法解析: {exc}"}
+    return HOST_RUNTIME.load_serve_status()
 
 
 def build_remote_status(tailscale_status: dict[str, Any], serve_status: dict[str, Any]) -> dict[str, Any]:
@@ -801,7 +642,7 @@ def collect_status() -> dict[str, Any]:
     remote_available = remote["published"] and remote["health_ok"] and app_ok and proxy_ok
 
     blocks = [
-        StatusBlock("PC 应用服务", app_ok, "运行中" if app_ok else "未启动", app_detail, "success" if app_ok else "error"),
+        StatusBlock("本机应用服务", app_ok, "运行中" if app_ok else "未启动", app_detail, "success" if app_ok else "error"),
         StatusBlock("nginx 代理", proxy_ok, "运行中" if proxy_ok else "未启动", proxy_detail, "success" if proxy_ok else "error"),
         StatusBlock(
             "Tailscale",
@@ -836,7 +677,11 @@ def collect_status() -> dict[str, Any]:
         "approved_devices": approved_devices,
         "pending_device_approvals": pending_approvals,
         "recent_mobile_requests": recent_requests,
-        "diagnostics": [f"[本地] 认证数据库：{AUTH_DB_PATH}"] + tail_error_lines(),
+        "diagnostics": [
+            f"[本地] 平台：{HOST_RUNTIME.platform_label}",
+            f"[本地] 运行时目录：{HOST_PATHS.runtime_root}",
+            f"[本地] 认证数据库：{AUTH_DB_PATH}",
+        ] + tail_error_lines(),
         "summary": {
             "app_running": app_ok,
             "nginx_running": proxy_ok,
@@ -894,7 +739,7 @@ def wait_for_remote_reachable(timeout: float = 8.0) -> bool:
 
 def perform_action(action: str) -> str:
     if action == "start":
-        result = powershell_file("start-mobile-codex-stack.ps1", timeout=30)
+        result = HOST_RUNTIME.start_stack()
         if result.returncode != 0:
             raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "启动整套服务失败")
         if not wait_for(stack_is_running, timeout=20, interval=1.5):
@@ -904,13 +749,13 @@ def perform_action(action: str) -> str:
         return "整套服务已启动"
 
     if action == "stop":
-        result = powershell_file("stop-mobile-codex-stack.ps1", timeout=20)
-        if TAILSCALE.exists():
+        result = HOST_RUNTIME.stop_stack()
+        if TAILSCALE is not None and TAILSCALE.exists():
             run_command([str(TAILSCALE), "serve", "reset"], timeout=10)
         if result.returncode != 0:
             raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "停止整套服务失败")
         if not wait_for(stack_is_stopped, timeout=15, interval=1.0):
-            powershell_file("stop-mobile-codex-stack.ps1", timeout=20)
+            HOST_RUNTIME.stop_stack()
             if not wait_for(stack_is_stopped, timeout=10, interval=1.0):
                 listeners = get_listener_map()
                 remaining = [listeners.get(port) for port in (APP_PORT, PROXY_PORT) if listeners.get(port)]
@@ -919,7 +764,7 @@ def perform_action(action: str) -> str:
         return "整套服务已停止"
 
     if action == "enable_remote":
-        result = run_command([str(TAILSCALE), "serve", "--bg", REMOTE_TARGET], timeout=20)
+        result = HOST_RUNTIME.enable_remote()
         if result.returncode != 0:
             raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "开启远程发布失败")
         if not wait_for(remote_publish_is_enabled, timeout=12, interval=1.0):
@@ -929,7 +774,7 @@ def perform_action(action: str) -> str:
         return "远程发布已开启，若手机端暂时打不开请等待几秒后刷新"
 
     if action == "disable_remote":
-        result = run_command([str(TAILSCALE), "serve", "reset"], timeout=10)
+        result = HOST_RUNTIME.disable_remote()
         if result.returncode != 0:
             raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "关闭远程发布失败")
         if not wait_for(lambda: not remote_publish_is_enabled(), timeout=8, interval=0.8):

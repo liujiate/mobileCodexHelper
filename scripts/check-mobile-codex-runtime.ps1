@@ -4,6 +4,11 @@ $upstream = if ($env:MOBILE_CODEX_UPSTREAM_DIR) {
 } else {
   Join-Path $workspace 'vendor\claudecodeui-1.25.2'
 }
+$runtimeRoot = if ($env:MOBILE_CODEX_RUNTIME_DIR) {
+  $env:MOBILE_CODEX_RUNTIME_DIR
+} else {
+  Join-Path $workspace '.runtime'
+}
 
 $nodeCommand = if ($env:MOBILE_CODEX_NODE) {
   Get-Item $env:MOBILE_CODEX_NODE -ErrorAction Stop
@@ -25,6 +30,7 @@ $tailscalePath = if ($env:MOBILE_CODEX_TAILSCALE) {
 
 [PSCustomObject]@{
   Workspace = $workspace
+  RuntimeRoot = $runtimeRoot
   UpstreamExists = (Test-Path $upstream)
   UpstreamPath = $upstream
   Node = if ($nodeCommand) { $nodeCommand.Path } else { $null }

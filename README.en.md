@@ -53,14 +53,17 @@ Codex sessions on your PC
 
 ## Prerequisites
 
-Prepare the following on your Windows PC:
+Supported host machines:
+
+- Windows 10 / 11
+- macOS (13+ recommended, Apple Silicon or Intel)
 
 ### Required
 
 - Python 3.11+
 - Node.js 22 LTS
 - Git
-- nginx for Windows
+- nginx
 - a working local Codex environment
 
 ### Strongly recommended
@@ -72,13 +75,29 @@ Why:
 - it is the easiest way to make this “private access for yourself only”
 - much safer than direct public exposure
 
+### macOS host notes
+
+If your host machine is a MacBook or Mac mini:
+
+- `python mobile_codex_control.py` now supports running on macOS
+- lifecycle scripts live under `scripts/*.sh`
+- background startup on macOS uses `tmux`
+- `.app` packaging uses `scripts/package-mobile-codex-control.sh`
+- run the compatibility probe first:
+
+```bash
+python3 scripts/check-mobile-codex-compat.py
+```
+
 ## Fastest path to deployment
+
+### Windows path
 
 If you do not want to read everything first, follow this shortest path:
 
 ### On the PC
 
-1. Install Python 3.11+, Node.js 22, nginx, and Tailscale
+1. Install Python 3.11+, Node.js 22, nginx, tmux, and Tailscale
 2. Put upstream `claudecodeui v1.25.2` into `vendor/claudecodeui-1.25.2`
 3. Run:
 
@@ -113,6 +132,21 @@ powershell -ExecutionPolicy Bypass -File scripts/enable-mobile-codex-remote.ps1
 5. If the phone waits for approval, approve the device in the desktop tool
 
 At that point, you can usually continue controlling Codex from the phone.
+
+### macOS path
+
+If your host machine is macOS, the shortest path is:
+
+1. Install Python 3.11+, Node.js 22, nginx, and Tailscale
+2. Put upstream `claudecodeui v1.25.2` into `vendor/claudecodeui-1.25.2`
+3. Run `powershell -ExecutionPolicy Bypass -File scripts/apply-upstream-overrides.ps1`
+4. Run `npm install` inside `vendor/claudecodeui-1.25.2`
+5. Back at the repo root, run `bash scripts/check-mobile-codex-runtime.sh`
+6. Run `python3 scripts/check-mobile-codex-compat.py`
+7. Run `bash scripts/start-mobile-codex-stack.sh`
+8. Run `python3 mobile_codex_control.py`
+9. Open `http://127.0.0.1:3001` locally and finish first registration
+10. Enable remote publish in the desktop tool and then access it from the iPhone over the same Tailscale network
 
 ## Step 1: Download this project
 
@@ -322,6 +356,12 @@ Run:
 powershell -ExecutionPolicy Bypass -File scripts/check-mobile-codex-runtime.ps1
 ```
 
+On macOS, run:
+
+```bash
+bash scripts/check-mobile-codex-runtime.sh
+```
+
 If any important field is empty, fix that first.
 
 ### 3. Your wrapped phone app is not WebView-compatible enough
@@ -342,10 +382,18 @@ Recommended order:
 powershell -ExecutionPolicy Bypass -File scripts/start-mobile-codex-stack.ps1
 ```
 
+```bash
+bash scripts/start-mobile-codex-stack.sh
+```
+
 ### Stop everything
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/stop-mobile-codex-stack.ps1
+```
+
+```bash
+bash scripts/stop-mobile-codex-stack.sh
 ```
 
 ### Check Tailscale status
@@ -354,10 +402,24 @@ powershell -ExecutionPolicy Bypass -File scripts/stop-mobile-codex-stack.ps1
 powershell -ExecutionPolicy Bypass -File scripts/check-tailscale-status.ps1
 ```
 
+```bash
+bash scripts/check-tailscale-status.sh
+```
+
+### Run the compatibility probe
+
+```bash
+python3 scripts/check-mobile-codex-compat.py
+```
+
 ### Package the desktop tool
 
 ```powershell
 scripts\package-mobile-codex-control.cmd
+```
+
+```bash
+bash scripts/package-mobile-codex-control.sh
 ```
 
 ### Smoke-test the override flow
@@ -367,6 +429,18 @@ powershell -ExecutionPolicy Bypass -File scripts/smoke-test-override-flow.ps1 -U
 ```
 
 ## Troubleshooting
+
+### 0. Do I need to re-adapt this helper after every Codex update?
+
+Usually no.
+
+The safer workflow is:
+
+1. run `python3 scripts/check-mobile-codex-compat.py`
+2. run one local start/stop smoke test
+3. only patch the helper if the probe or smoke test fails
+
+The higher-risk upgrade remains `claudecodeui`, because this repo applies whole-file overrides on top of a pinned upstream `v1.25.2`.
 
 ### 1. The phone can open the page, but nothing happens after login
 

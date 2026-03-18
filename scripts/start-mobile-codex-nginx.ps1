@@ -1,12 +1,19 @@
 $workspace = Split-Path -Parent $PSScriptRoot
+$runtimeRoot = if ($env:MOBILE_CODEX_RUNTIME_DIR) {
+  $env:MOBILE_CODEX_RUNTIME_DIR
+} else {
+  Join-Path $workspace '.runtime'
+}
 $asciiAlias = if ($env:MOBILE_CODEX_ASCII_ALIAS) {
   $env:MOBILE_CODEX_ASCII_ALIAS
 } else {
   Join-Path $env:SystemDrive 'mobileCodexHelper_ascii'
 }
+$aliasTarget = Split-Path -Parent $runtimeRoot
+$runtimeLeaf = Split-Path -Leaf $runtimeRoot
 
 if (-not (Test-Path $asciiAlias)) {
-  New-Item -ItemType Junction -Path $asciiAlias -Target $workspace | Out-Null
+  New-Item -ItemType Junction -Path $asciiAlias -Target $aliasTarget | Out-Null
 }
 
 $nginxCmd = if ($env:MOBILE_CODEX_NGINX) {
@@ -19,7 +26,7 @@ $nginxCmd = if ($env:MOBILE_CODEX_NGINX) {
   $found.Path
 }
 
-$nginxRoot = Join-Path $asciiAlias '.runtime\nginx'
+$nginxRoot = Join-Path (Join-Path $asciiAlias $runtimeLeaf) 'nginx'
 $confRoot = Join-Path $nginxRoot 'conf'
 $logsRoot = Join-Path $nginxRoot 'logs'
 $tempRoot = Join-Path $nginxRoot 'temp'
