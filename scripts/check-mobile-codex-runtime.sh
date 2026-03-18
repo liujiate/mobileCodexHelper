@@ -7,7 +7,13 @@ runtime_root="${MOBILE_CODEX_RUNTIME_DIR:-$workspace/.runtime}"
 
 node_path="${MOBILE_CODEX_NODE:-$(command -v node || true)}"
 nginx_path="${MOBILE_CODEX_NGINX:-$(command -v nginx || true)}"
-tailscale_path="${MOBILE_CODEX_TAILSCALE:-$(command -v tailscale || true)}"
+if [[ -n "${MOBILE_CODEX_TAILSCALE:-}" ]]; then
+  tailscale_path="$MOBILE_CODEX_TAILSCALE"
+elif [[ -x "/Applications/Tailscale.app/Contents/MacOS/Tailscale" ]]; then
+  tailscale_path="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
+else
+  tailscale_path="$(command -v tailscale || true)"
+fi
 tmux_path="$(command -v tmux || true)"
 python_path="$(command -v python3 || command -v python || true)"
 

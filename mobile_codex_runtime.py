@@ -107,6 +107,27 @@ def _resolve_command_path(
     return None
 
 
+def _resolve_command_path_prefer_fallbacks(
+    env_name: str,
+    command_names: list[str],
+    fallback_paths: list[Path],
+) -> Path | None:
+    configured = os.environ.get(env_name)
+    if configured:
+        return Path(configured).expanduser()
+
+    for fallback in fallback_paths:
+        if fallback.exists():
+            return fallback
+
+    for command_name in command_names:
+        found = shutil.which(command_name)
+        if found:
+            return Path(found)
+
+    return None
+
+
 class HostRuntime:
     script_extension = ""
     platform_label = "unknown"
@@ -330,7 +351,7 @@ class MacHostRuntime(HostRuntime):
         scripts_dir = self.workspace / "scripts"
         app_stderr_log = self.workspace / "tmp" / "logs" / "mobile-codex-app.stderr.log"
         proxy_log_root = runtime_root / "nginx" / "logs"
-        tailscale = _resolve_command_path(
+        tailscale = _resolve_command_path_prefer_fallbacks(
             "MOBILE_CODEX_TAILSCALE",
             ["tailscale"],
             [

@@ -3,6 +3,8 @@ set -euo pipefail
 
 if [[ -n "${MOBILE_CODEX_TAILSCALE:-}" ]]; then
   tailscale_bin="$MOBILE_CODEX_TAILSCALE"
+elif [[ -x "/Applications/Tailscale.app/Contents/MacOS/Tailscale" ]]; then
+  tailscale_bin="/Applications/Tailscale.app/Contents/MacOS/Tailscale"
 else
   tailscale_bin="$(command -v tailscale || true)"
 fi
