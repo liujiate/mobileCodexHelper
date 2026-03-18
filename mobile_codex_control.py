@@ -217,7 +217,8 @@ def wait_for(predicate: Callable[[], bool], timeout: float, interval: float = 1.
 
 def http_health(url: str, timeout: float = 2.5) -> tuple[bool, str]:
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as response:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        with opener.open(url, timeout=timeout) as response:
             body = response.read(200).decode("utf-8", errors="replace")
             return True, f"{response.status} {response.reason} | {body[:80]}"
     except urllib.error.HTTPError as exc:
